@@ -419,7 +419,7 @@ const CATS = [
 const WD = ["일", "월", "화", "수", "목", "금", "토"];
 const SNAP = 15;
 const MIN_EV_PX = 20; // 일정 칸의 최소 높이 (한 줄)
-const MAX_LEN = 72 * 60; // 일정 하나의 최대 길이 (분)
+const MAX_LEN = 14 * 1440; // 일정 하나의 최대 길이 (분): 여행 최대 기간과 같은 14일
 // 종료 시각 표시: 자정을 넘으면 "다음날 03:00"
 function endLabel(end) { const off = Math.floor(end / 1440); if (!off) return hhmm(end); if (end === 1440) return "24:00"; return `${off === 1 ? "다음날" : `${off}일 뒤`} ${hhmm(end % 1440)}`; }
 function spanLabel(e) { return `${hhmm(e.start)}–${endLabel(e.end)}`; }
@@ -931,7 +931,7 @@ $("evForm").addEventListener("submit", async (e) => {
   if (start == null || endT == null) { setFErr("시작·종료 시간을 입력하세요."); return; }
   const end = (endDay - day) * 1440 + endT;
   if (end <= start) { setFErr("종료가 시작보다 늦어야 해요. 다음날 끝나는 일정이면 종료 날짜를 다음날로 고르세요."); return; }
-  if (end - start > MAX_LEN) { setFErr("일정 하나는 최대 72시간까지 만들 수 있어요."); return; }
+  if (end - start > MAX_LEN) { setFErr("일정 하나는 최대 14일까지 만들 수 있어요."); return; }
   const cat = (document.querySelector('input[name="cat"]:checked') || {}).value || "etc";
   const prev = editingId ? events.get(editingId) : null;
   const data = stamp({ title, place: $("fPlace").value.trim(), memo: $("fMemo").value.trim(), cat, day, start, end }, prev);
