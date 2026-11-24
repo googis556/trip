@@ -134,10 +134,16 @@ h2.trip-title { margin: 0; font-size: 22px; font-weight: 700; text-wrap: balance
 .ev .n { font-weight: 700; overflow-wrap: anywhere; }
 .ev .p { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
 .ev .grip { position: absolute; left: 0; right: 0; bottom: 0; height: 8px; cursor: ns-resize; }
+/* 칸이 낮은 일정: 한 줄로 (시간 + 제목), 더 낮으면 제목만 */
+.ev.short { display: flex; align-items: center; gap: 5px; padding: 0 6px; white-space: nowrap; }
+.ev.short .t { flex: none; }
+.ev.short .n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ev.short .p { display: none; }
-.ev.cont { border-left-style: dashed; }
-.ev.tiny { padding-top: 1px; }
+.ev.tiny { font-size: 10.5px; line-height: 1; }
 .ev.tiny .t { display: none; }
+.ev.cont { border-left-style: dashed; }
+.zoom { display: inline-flex; align-items: center; gap: 6px; }
+.zoom .seg span { padding: 3px 9px; font-size: 12px; }
 .ghost { position: absolute; left: 3px; right: 3px; border-radius: 6px; border: 2px dashed var(--accent); background: var(--accent-soft); pointer-events: none; font-family: var(--font-mono); font-size: 11px; color: var(--accent); padding: 3px 6px; box-sizing: border-box; font-variant-numeric: tabular-nums; }
 .cat-move { --ev: var(--c-move); --ev-bg: var(--c-move-bg); }
 .cat-see { --ev: var(--c-see); --ev-bg: var(--c-see-bg); }
@@ -273,6 +279,11 @@ h2.trip-title { margin: 0; font-size: 22px; font-weight: 700; text-wrap: balance
     </div>
     <div class="notes gutter">
       <div class="legend" id="legend"></div>
+      <div class="zoom"><span>시간 간격</span><div class="seg" id="zoomSeg">
+        <label><input type="radio" name="zoom" value="48" id="zoom48"><span>보통</span></label>
+        <label><input type="radio" name="zoom" value="80" id="zoom80"><span>넓게</span></label>
+        <label><input type="radio" name="zoom" value="120" id="zoom120"><span>아주 넓게</span></label>
+      </div></div>
       <div class="status" id="status">불러오는 중…</div>
     </div>
     <div class="board-wrap" id="boardWrap">
@@ -407,6 +418,7 @@ const CATS = [
 ];
 const WD = ["일", "월", "화", "수", "목", "금", "토"];
 const SNAP = 15;
+const MIN_EV_PX = 20; // 일정 칸의 최소 높이 (한 줄)
 const MAX_LEN = 72 * 60; // 일정 하나의 최대 길이 (분)
 // 종료 시각 표시: 자정을 넘으면 "다음날 03:00"
 function endLabel(end) { const off = Math.floor(end / 1440); if (!off) return hhmm(end); if (end === 1440) return "24:00"; return `${off === 1 ? "다음날" : `${off}일 뒤`} ${hhmm(end % 1440)}`; }
@@ -684,16 +696,18 @@ const wrap = $("boardWrap");
 $("legend").innerHTML = CATS.map((c) => `<span class="cat-${c.id}"><i></i>${c.label}</span>`).join("");
 $("fCats").innerHTML = CATS.map((c) => `<label class="cat-${c.id}"><input type="radio" name="cat" value="${c.id}" id="cat-${c.id}"><span>${c.label}</span></label>`).join("");
 
-function layoutDay(list) {
+// 겹침 계산은 "보이는 끝"(짧은 일정은 최소 한 줄 높이) 기준이라, 짧은 일정 바로 뒤 일정이 가려지지 않고 옆으로 놓여요
+function layoutDay(list, minMin = 0) {
+  list.forEach((e) => { e._ve = Math.max(e.end, e.start + minMin); });
   list.sort((a, b) => a.start - b.start || b.end - a.end);
   const out = []; let cluster = []; let clusterEnd = -1;
   const flush = () => {
     const lanes = [];
-    cluster.forEach((e) => { let lane = lanes.findIndex((end) => end <= e.start); if (lane < 0) { lane = lanes.length; lanes.push(0); } lanes[lane] = e.end; e._lane = lane; });
+    cluster.forEach((e) => { let lane = lanes.findIndex((end) => end <= e.start); if (lane < 0) { lane = lanes.length; lanes.push(0); } lanes[lane] = e._ve; e._lane = lane; });
     cluster.forEach((e) => { e._lanes = lanes.length; out.push(e); });
     cluster = [];
   };
-  list.forEach((e) => { if (cluster.length && e.start >= clusterEnd) flush(); if (!cluster.length) clusterEnd = e.end; cluster.push(e); clusterEnd = Math.max(clusterEnd, e.end); });
+  list.forEach((e) => { if (cluster.length && e.start >= clusterEnd) flush(); if (!cluster.length) clusterEnd = e._ve; cluster.push(e); clusterEnd = Math.max(clusterEnd, e._ve); });
   if (cluster.length) flush();
   return out;
 }
@@ -729,11 +743,11 @@ function renderTrip() {
   }
   for (let d = 0; d < info.days; d++) {
     const dt = dayDate(d); const wk = dt.getDay() === 0 || dt.getDay() === 6;
-    const evHtml = layoutDay(byDay[d]).map((e) => {
-      const w = 100 / e._lanes, dur = e.end - e.start;
-      const cls = ["ev", "cat-" + e.cat, dur < 45 ? "short" : "", dur < 30 ? "tiny" : "", e.first ? "" : "cont", drag && drag.id === e.id && drag.moved ? "dragging" : ""].join(" ");
+    const evHtml = layoutDay(byDay[d], (MIN_EV_PX + 2) / hourPx * 60).map((e) => {
+      const w = 100 / e._lanes, dur = e.end - e.start, px = (dur / 60) * hourPx - 2;
+      const cls = ["ev", "cat-" + e.cat, px < 44 ? "short" : "", px < 22 ? "tiny" : "", e.first ? "" : "cont", drag && drag.id === e.id && drag.moved ? "dragging" : ""].join(" ");
       const label = e.first ? spanLabel(e.full) : `이어서 ~${hhmm(e.end)}`;
-      return `<div class="${cls}" data-id="${e.id}" tabindex="0" role="button" style="top:calc(var(--hour) * ${e.start / 60});height:calc(var(--hour) * ${dur / 60} - 2px);left:calc(${e._lane * w}% + 3px);width:calc(${w}% - 6px)"><div class="t">${label}</div><div class="n"></div><div class="p"></div>${canWrite && e.last ? '<div class="grip" data-grip="1"></div>' : ""}</div>`;
+      return `<div class="${cls}" data-id="${e.id}" tabindex="0" role="button" style="top:calc(var(--hour) * ${e.start / 60});height:${Math.max(px, MIN_EV_PX)}px;left:calc(${e._lane * w}% + 3px);width:calc(${w}% - 6px)"><div class="t">${label}</div><div class="n"></div><div class="p"></div>${canWrite && e.last ? '<div class="grip" data-grip="1"></div>' : ""}</div>`;
     }).join("");
     let ghost = "";
     if (drag && drag.mode === "create") {
@@ -756,6 +770,19 @@ function renderTrip() {
   });
   if (outside) setStatus(`여행 기간 밖에 있는 일정 ${outside}개가 숨겨져 있어요. 여행 설정에서 돌아오는 날을 늦추세요.`, true);
 }
+// ---------- 시간 간격 (확대) : 이 기기에만 기억 ----------
+let hourPx = 48;
+try { const z = Number(localStorage.getItem("trip.hourPx")); if ([48, 80, 120].includes(z)) hourPx = z; } catch {}
+wrap.style.setProperty("--hour", hourPx + "px");
+$("zoom" + hourPx).checked = true;
+$("zoomSeg").addEventListener("change", (e) => {
+  const next = Number(e.target.value); if (!next || next === hourPx) return;
+  const topMin = (wrap.scrollTop / hourPx) * 60;
+  hourPx = next; wrap.style.setProperty("--hour", hourPx + "px");
+  try { localStorage.setItem("trip.hourPx", String(hourPx)); } catch {}
+  renderTrip();
+  wrap.scrollTop = (topMin / 60) * hourPx;
+});
 function scrollToMorning() {
   const first = [...events.values()].reduce((m, e) => Math.min(m, e.start), 540);
   const hourPx = (board.querySelector(".hours")?.getBoundingClientRect().height || 0) / 24;
