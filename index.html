@@ -343,8 +343,9 @@ h2.trip-title { margin: 0; font-size: 22px; font-weight: 700; text-wrap: balance
     <label class="field"><span>여행 이름</span><input id="sTitle" maxlength="60" autocomplete="off"></label>
     <div class="row2">
       <label class="field"><span>출발일</span><input id="sStart" type="date"></label>
-      <label class="field"><span>일수</span><input id="sDays" type="number" min="1" max="14" inputmode="numeric"></label>
+      <label class="field"><span>돌아오는 날</span><input id="sEnd" type="date"></label>
     </div>
+    <p class="who" id="sLen"></p>
     <p class="err" id="sErr"></p>
     <div class="sheet-foot">
       <button class="btn danger" id="sClear" type="button">일정 모두 삭제</button>
@@ -865,17 +866,48 @@ $("fDelete").onclick = async () => {
 
 // ---------- settings ----------
 $("settingsBtn").onclick = () => {
-  $("sTitle").value = info.title; $("sStart").value = info.start; $("sDays").value = info.days; $("sErr").textContent = "";
+  $("sTitle").value = info.title; $("sStart").value = info.start; $("sEnd").value = iso(dayDate(info.days - 1)); $("sErr").textContent = "";
+  updateLen();
   for (const [id, label] of [["sClear", "일정 모두 삭제"], ["sDeleteTrip", "여행 삭제"]]) { const b = $(id); b.classList.remove("armed"); b.textContent = label; }
   show("sDeleteTrip", isOwner());
   show("settings");
 };
 $("sCancel").onclick = () => show("settings", false);
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+function daysBetween(a, b) {
+  if (!DATE_RE.test(a) || !DATE_RE.test(b)) return NaN;
+  const u = (s) => { const [y, m, d] = s.split("-").map(Number); return Date.UTC(y, m - 1, d); };
+  return Math.round((u(b) - u(a)) / 86400000) + 1;
+}
+function updateLen() {
+  const n = daysBetween($("sStart").value, $("sEnd").value);
+  $("sEnd").min = $("sStart").value;
+  const len = $("sLen");
+  len.classList.remove("err");
+  if (!(n >= 1)) { len.textContent = ""; return; }
+  len.textContent = n === 1 ? "당일치기" : `${n - 1}박 ${n}일`;
+  if (n > 14) { len.textContent += " · 최대 14일까지 만들 수 있어요"; len.classList.add("err"); }
+}
+// 출발일을 옮기면 여행 길이를 유지한 채 돌아오는 날도 함께 옮겨요
+let prevStart = "";
+$("sStart").addEventListener("focus", () => { prevStart = $("sStart").value; });
+$("sStart").addEventListener("change", () => {
+  const len = daysBetween(prevStart, $("sEnd").value);
+  if (DATE_RE.test($("sStart").value) && len >= 1) {
+    const [y, m, d] = $("sStart").value.split("-").map(Number);
+    $("sEnd").value = iso(new Date(y, m - 1, d + len - 1));
+  }
+  prevStart = $("sStart").value;
+  updateLen();
+});
+$("sEnd").addEventListener("input", updateLen);
 $("setForm").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const days = Math.floor(Number($("sDays").value));
-  if (!/^\d{4}-\d{2}-\d{2}$/.test($("sStart").value)) { $("sErr").textContent = "출발일을 선택하세요."; return; }
-  if (!(days >= 1 && days <= 14)) { $("sErr").textContent = "일수는 1~14일 사이로 입력하세요."; return; }
+  if (!DATE_RE.test($("sStart").value)) { $("sErr").textContent = "출발일을 선택하세요."; return; }
+  if (!DATE_RE.test($("sEnd").value)) { $("sErr").textContent = "돌아오는 날을 선택하세요."; return; }
+  const days = daysBetween($("sStart").value, $("sEnd").value);
+  if (days < 1) { $("sErr").textContent = "돌아오는 날은 출발일과 같거나 그 뒤여야 해요."; return; }
+  if (days > 14) { $("sErr").textContent = "여행은 최대 14일까지 만들 수 있어요."; return; }
   const next = { title: $("sTitle").value.trim().slice(0, 60) || "새 여행", start: $("sStart").value, days };
   show("settings", false);
   try { await F.updateDoc(tripRef(), { ...next, updatedAt: Date.now() }); toast("여행 설정을 저장했어요"); }
