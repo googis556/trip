@@ -16,4 +16,11 @@
 //   appId: "...",
 // };
 
-export const firebaseConfig = null;
+export const firebaseConfig = {
+  apiKey: "AIzaSyC86kYbwks4HlSrFWoNpvDECVObAHdvNyo",
+  authDomain: "trip-planner-f0080.firebaseapp.com",
+  projectId: "trip-planner-f0080",
+  storageBucket: "trip-planner-f0080.firebasestorage.app",
+  messagingSenderId: "688322428209",
+  appId: "1:688322428209:web:c98bc4ff246eeb12704410",
+};
