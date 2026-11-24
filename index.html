@@ -158,6 +158,12 @@ h2.trip-title { margin: 0; font-size: 22px; font-weight: 700; text-wrap: balance
 .scrim { position: fixed; inset: 0; z-index: 20; background: rgba(10,20,25,.42); display: flex; align-items: center; justify-content: center; padding: 16px; }
 .sheet { background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); width: min(440px, 100%); max-height: calc(100% - 32px); overflow: auto; padding: 18px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box; }
 .sheet h3 { margin: 0; font-size: 17px; }
+#exportSheet .sheet { width: min(560px, 100%); }
+.xprev { max-height: 46vh; min-height: 120px; overflow: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 10px; align-items: center; justify-content: flex-start; }
+.xprev img { width: 100%; max-width: 420px; height: auto; display: block; border-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,.15); background: #ffffff; }
+.xprev figure { margin: 0; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.xprev figcaption { font-size: 11.5px; color: var(--muted); }
+.xprev .wait { margin: auto; color: var(--muted); font-size: 13px; }
 .sheet .sub { margin: -6px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .field > span { font-size: 12px; color: var(--muted); font-weight: 500; }
@@ -191,12 +197,13 @@ h2.trip-title { margin: 0; font-size: 22px; font-weight: 700; text-wrap: balance
 .xp-day + .xp-day { border-top: 1px solid #dde5e8; }
 .xp-trip { font-size: 13px; color: #5d6f78; }
 .xp-h { font-size: 22px; font-weight: 700; margin: 2px 0 14px; letter-spacing: -.01em; }
-.xp-row { display: grid; grid-template-columns: 112px 1fr; gap: 14px; padding: 10px 0; border-top: 1px solid #e6ecef; }
+.xp-row { display: grid; grid-template-columns: 150px 1fr; gap: 14px; padding: 10px 0; border-top: 1px solid #e6ecef; }
 .xp-time { font-family: var(--font-mono); font-size: 13px; line-height: 1.5; color: #13232b; padding-top: 2px; }
 .xp-cat { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; margin-right: 6px; vertical-align: 1px; }
 .xp-title { font-size: 15px; font-weight: 700; }
 .xp-place { font-size: 13px; color: #44565f; margin-top: 2px; }
 .xp-memo { font-size: 12.5px; color: #5d6f78; margin-top: 3px; white-space: pre-wrap; }
+.xp-row.cont .xp-time { color: #5d6f78; }
 .xp-none { color: #8a9aa1; font-size: 13px; padding: 10px 0; border-top: 1px solid #e6ecef; }
 .xp-foot { font-size: 11px; color: #8a9aa1; padding: 0 32px 20px; background: #ffffff; }
 /* weekly timetable image: 540 CSS px wide, rendered at 2x = 1080px for phones */
@@ -217,7 +224,7 @@ h2.trip-title { margin: 0; font-size: 22px; font-weight: 700; text-wrap: balance
 .xw-head .xw-n { font-family: var(--font-body); color: #0b6f6a; font-weight: 500; }
 .xw-col.off .xw-head small { color: #a3b0b6; }
 .xw-head.sun b { color: #c0392b; } .xw-head.sat b { color: #2f6fd0; }
-.xw-body { position: relative; }
+.xw-body { position: relative; overflow: hidden; }
 .xw-hour { position: absolute; left: 0; right: 0; border-top: 1px solid #edf1f3; }
 .xw-rail .xw-body span { position: absolute; right: 4px; font-size: 9px; color: #7b8c94; font-family: var(--font-mono); transform: translateY(-50%); }
 .xw-ev { position: absolute; border-radius: 4px; border-left: 2px solid; padding: 2px 3px; box-sizing: border-box; overflow: hidden; font-size: 9.5px; line-height: 1.25; }
@@ -412,6 +419,7 @@ h2.trip-title { margin: 0; font-size: 22px; font-weight: 700; text-wrap: balance
         <label><input type="radio" name="xfmt" value="week" id="xWeek"><span>주간 시간표 (일~토)</span></label>
       </div>
     </div>
+    <div class="xprev" id="xPrev" aria-label="미리보기"></div>
     <p class="err" id="xMsg"></p>
     <div class="sheet-foot">
       <div class="spacer"></div>
@@ -449,8 +457,30 @@ const SNAP = 15;
 const MIN_EV_PX = 20; // 일정 칸의 최소 높이 (한 줄)
 const MAX_LEN = 14 * 1440; // 일정 하나의 최대 길이 (분): 여행 최대 기간과 같은 14일
 // 종료 시각 표시: 자정을 넘으면 "다음날 03:00"
-function endLabel(end) { const off = Math.floor(end / 1440); if (!off) return hhmm(end); if (end === 1440) return "24:00"; return `${off === 1 ? "다음날" : `${off}일 뒤`} ${hhmm(end % 1440)}`; }
-function spanLabel(e) { return `${hhmm(e.start)}–${endLabel(e.end)}`; }
+// 종료 시각 표시: 같은 날 "12:00", 다음날 "다음날 03:00", 이틀 이상 뒤면 실제 날짜 "11/29(일) 12:00"
+function endLabel(end, day = 0) {
+  const off = Math.floor(end / 1440);
+  if (!off) return hhmm(end);
+  if (end === 1440) return "24:00";
+  if (off === 1) return `다음날 ${hhmm(end % 1440)}`;
+  const d = dayDate(day + off);
+  return `${d.getMonth() + 1}/${d.getDate()}(${WD[d.getDay()]}) ${hhmm(end % 1440)}`;
+}
+function spanLabel(e) { return `${hhmm(e.start)}–${endLabel(e.end, e.day || 0)}`; }
+// 날짜별 목록(텍스트 복사, 목록 이미지, PDF)에 들어갈 항목: 그날 시작한 일정 + 전날부터 이어지는 일정
+//  - 그날 하루를 다 덮으면 "종일", 그날 중간에 끝나면 "~12:00", 둘 다 그날 맨 위에 와요
+function dayItems(d) {
+  const out = [];
+  for (const e of events.values()) {
+    if (d === e.day) { out.push({ e, cont: false, label: spanLabel(e), key: e.start }); continue; }
+    if (d < e.day) continue;
+    const endHere = e.end - (d - e.day) * 1440;
+    if (endHere <= 0) continue;
+    if (endHere >= 1440) out.push({ e, cont: true, label: "종일", key: -2 });
+    else out.push({ e, cont: true, label: `~${hhmm(endHere)}`, key: -1 });
+  }
+  return out.sort((a, b) => a.key - b.key || a.e.start - b.e.start);
+}
 const $ = (id) => document.getElementById(id);
 const show = (id, on = true) => { $(id).hidden = !on; };
 
@@ -774,7 +804,7 @@ function renderTrip() {
     const evHtml = layoutDay(byDay[d], (MIN_EV_PX + 2) / hourPx * 60).map((e) => {
       const w = 100 / e._lanes, dur = e.end - e.start, px = (dur / 60) * hourPx - 2;
       const cls = ["ev", "cat-" + e.cat, px < 44 ? "short" : "", px < 22 ? "tiny" : "", e.first ? "" : "cont", drag && drag.id === e.id && drag.moved ? "dragging" : ""].join(" ");
-      const label = e.first ? spanLabel(e.full) : `이어서 ~${hhmm(e.end)}`;
+      const label = e.first ? spanLabel(e.full) : (e.end >= 1440 ? "이어서 · 종일" : `이어서 ~${hhmm(e.end)}`);
       return `<div class="${cls}" data-id="${e.id}" tabindex="0" role="button" style="top:calc(var(--hour) * ${e.start / 60});height:${Math.max(px, MIN_EV_PX)}px;left:calc(${e._lane * w}% + 3px);width:calc(${w}% - 6px)"><div class="t">${label}</div><div class="n"></div><div class="p"></div>${canWrite && e.last ? '<div class="grip" data-grip="1"></div>' : ""}</div>`;
     }).join("");
     let ghost = "";
@@ -782,7 +812,7 @@ function renderTrip() {
       const s = Math.max(0, drag.startAbs - d * 1440), en = Math.min(1440, drag.endAbs - d * 1440);
       if (en > s) {
         const first = drag.startAbs >= d * 1440;
-        const txt = first ? spanLabel({ start: s, end: drag.endAbs - d * 1440 }) : `이어서 ~${hhmm(en)}`;
+        const txt = first ? spanLabel({ start: s, end: drag.endAbs - d * 1440, day: d }) : `이어서 ~${hhmm(en)}`;
         ghost = `<div class="ghost" style="top:calc(var(--hour) * ${s / 60});height:calc(var(--hour) * ${(en - s) / 60})">${txt}</div>`;
       }
     }
@@ -1060,12 +1090,12 @@ $("shareBtn").onclick = () => copyText(location.href, "링크를 복사했어요
 function asText(days) {
   const lines = [`[${info.title}] ${rangeText(info.start, info.days)}`];
   for (const d of days) {
-    const list = [...events.values()].filter((e) => e.day === d).sort((a, b) => a.start - b.start);
+    const items = dayItems(d);
     lines.push("", dayLabel(d));
-    if (!list.length) lines.push("  (일정 없음)");
-    list.forEach((e) => {
-      lines.push(`  ${spanLabel(e)}  [${catInfo(e.cat).label}] ${e.title}${e.place ? "  @ " + e.place : ""}`);
-      if (e.memo) lines.push(`      ${e.memo.replace(/\n/g, " ")}`);
+    if (!items.length) lines.push("  (일정 없음)");
+    items.forEach(({ e, cont, label }) => {
+      lines.push(`  ${label}  [${catInfo(e.cat).label}] ${e.title}${e.place ? "  @ " + e.place : ""}`);
+      if (e.memo && !cont) lines.push(`      ${e.memo.replace(/\n/g, " ")}`);
     });
   }
   return lines.join("\n");
@@ -1085,8 +1115,10 @@ $("exportBtn").onclick = () => {
   show("xShare", canShareFiles);
   syncExportMode();
   show("exportSheet");
+  preparePreview();
 };
-$("xCancel").onclick = () => show("exportSheet", false);
+$("xCancel").onclick = () => { show("exportSheet", false); xToken++; clearPreview(); $("xPrev").textContent = ""; };
+$("xRange").addEventListener("change", preparePreview);
 function syncExportMode() {
   const week = $("xWeek").checked;
   show("xRangeField", !week);
@@ -1094,7 +1126,7 @@ function syncExportMode() {
     ? "일요일부터 토요일까지 한 주를 시간표 그대로 휴대폰 화면에 맞춘 이미지로 만들어요. 여행이 여러 주에 걸치면 주마다 한 장씩 만들어요."
     : "날짜별로 시간, 일정, 장소, 메모를 정리한 표로 만들어요.";
 }
-document.querySelectorAll('input[name="xfmt"]').forEach((r) => r.addEventListener("change", syncExportMode));
+document.querySelectorAll('input[name="xfmt"]').forEach((r) => r.addEventListener("change", () => { syncExportMode(); preparePreview(); }));
 
 // ---------- weekly timetable image ----------
 // 여행 날짜가 들어있는 주(일~토)마다 7칸 시간표를 만들어요
@@ -1128,12 +1160,13 @@ function buildWeekImages() {
   const roots = [];
   const weeks = tripWeeks();
   weeks.forEach((cols, wi) => {
-    const inWeek = cols.flatMap((c) => segs.get(c.idx) || []);
+    // 하루 종일 이어지는 조각(숙소 등)은 어느 시간대로 잘라도 보이니까, 그릴 시간 범위를 정할 때는 빼요
+    const inWeek = cols.flatMap((c) => segs.get(c.idx) || []).filter((x) => !(x.start === 0 && x.end >= 1440));
     let h0 = 9, h1 = 18;
     if (inWeek.length) { h0 = Math.floor(Math.min(...inWeek.map((x) => x.start)) / 60); h1 = Math.ceil(Math.max(...inWeek.map((x) => x.end)) / 60); }
     if (h1 - h0 < 6) { h1 = Math.min(24, h0 + 6); h0 = Math.max(0, h1 - 6); }
     const hours = h1 - h0;
-    const HH = clamp(Math.round(1050 / hours), 32, 64); // 휴대폰 세로 화면에 맞도록 한 시간 높이를 조절
+    const HH = clamp(Math.round(700 / hours), 22, 56); // 이미지 전체가 휴대폰 한 화면(약 9:16) 안에 들어오도록 한 시간 높이를 조절
     const bodyH = hours * HH;
     const root = document.createElement("div"); root.className = "xw";
     const title = document.createElement("div"); title.className = "xw-title"; title.textContent = info.title;
@@ -1161,12 +1194,14 @@ function buildWeekImages() {
       const list = (segs.get(c.idx) || []).map((x) => ({ ...x }));
       for (const x of layoutDay(list, (15 / HH) * 60)) {
         const ci2 = catInfo(x.cat);
-        const top = ((x.start - h0 * 60) / 60) * HH, hpx = Math.max(((x.end - x.start) / 60) * HH - 1, 14);
+        const cs = Math.max(x.start, h0 * 60), ce = Math.min(x.end, h1 * 60); // 그린 시간 범위 밖은 잘라요
+        if (ce <= cs) continue;
+        const top = ((cs - h0 * 60) / 60) * HH, hpx = Math.min(Math.max(((ce - cs) / 60) * HH - 1, 14), bodyH - top);
         const w = 100 / x._lanes;
         const el = document.createElement("div"); el.className = "xw-ev" + (hpx < 30 ? " one" : "");
         Object.assign(el.style, { top: top + "px", height: hpx + "px", left: `calc(${x._lane * w}% + 1px)`, width: `calc(${w}% - 2px)`, background: ci2.bg, borderLeftColor: ci2.fg });
         if (!x.first) el.style.borderLeftStyle = "dashed";
-        if (hpx >= 30) { const t = document.createElement("div"); t.className = "t"; t.style.color = ci2.fg; t.textContent = x.first ? hhmm(x.start) : `~${hhmm(x.end)}`; el.append(t); }
+        if (hpx >= 30) { const t = document.createElement("div"); t.className = "t"; t.style.color = ci2.fg; t.textContent = x.first ? hhmm(x.start) : (x.end >= 1440 ? "종일" : `~${hhmm(x.end)}`); el.append(t); }
         const n = document.createElement("div"); n.className = "n"; n.textContent = x.title || "(제목 없음)"; el.append(n);
         body.append(el);
       }
@@ -1188,11 +1223,11 @@ function buildExport(days) {
     const t = document.createElement("div"); t.className = "xp-trip"; t.textContent = `${info.title} · ${rangeText(info.start, info.days)}`;
     const h = document.createElement("div"); h.className = "xp-h"; h.textContent = dayLabel(d);
     sec.append(t, h);
-    const list = [...events.values()].filter((e) => e.day === d).sort((a, b) => a.start - b.start);
-    if (!list.length) { const n = document.createElement("div"); n.className = "xp-none"; n.textContent = "일정 없음"; sec.append(n); }
-    for (const e of list) {
-      const row = document.createElement("div"); row.className = "xp-row";
-      const time = document.createElement("div"); time.className = "xp-time"; time.textContent = spanLabel(e);
+    const items = dayItems(d);
+    if (!items.length) { const n = document.createElement("div"); n.className = "xp-none"; n.textContent = "일정 없음"; sec.append(n); }
+    for (const { e, cont, label } of items) {
+      const row = document.createElement("div"); row.className = "xp-row" + (cont ? " cont" : "");
+      const time = document.createElement("div"); time.className = "xp-time"; time.textContent = label;
       const main = document.createElement("div");
       const ci = catInfo(e.cat);
       const title = document.createElement("div"); title.className = "xp-title";
@@ -1200,7 +1235,7 @@ function buildExport(days) {
       title.append(pill, e.title || "(제목 없음)");
       main.append(title);
       if (e.place) { const p = document.createElement("div"); p.className = "xp-place"; p.textContent = e.place; main.append(p); }
-      if (e.memo) { const m = document.createElement("div"); m.className = "xp-memo"; m.textContent = e.memo; main.append(m); }
+      if (e.memo && !cont) { const m = document.createElement("div"); m.className = "xp-memo"; m.textContent = e.memo; main.append(m); }
       row.append(time, main); sec.append(row);
     }
     root.append(sec); sections.push(sec);
@@ -1217,13 +1252,14 @@ async function makeFiles() {
     try { await document.fonts.ready; } catch {}
     const safeW = (info.title || "여행").replace(/[\\/:*?"<>|]+/g, " ").trim().slice(0, 40) || "여행";
     try {
-      const roots = buildWeekImages(), files = [];
+      const roots = buildWeekImages(), files = [], previews = [];
       for (let i = 0; i < roots.length; i++) {
         const canvas = await window.html2canvas(roots[i], { scale: 2, backgroundColor: "#ffffff", logging: false });
         const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
         files.push(new File([blob], `${safeW}-주간시간표${roots.length > 1 ? `-${i + 1}주` : ""}.png`, { type: "image/png" }));
+        previews.push({ src: URL.createObjectURL(blob), cap: roots.length > 1 ? `${i + 1}/${roots.length}주` : "" });
       }
-      return files;
+      return { files, previews };
     } finally { $("xpStage").textContent = ""; }
   }
   const range = $("xRange").value;
@@ -1237,12 +1273,12 @@ async function makeFiles() {
     if (fmt === "png") {
       const canvas = await snap(root);
       const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
-      return [new File([blob], `${safe}-${suffix}.png`, { type: "image/png" })];
+      return { files: [new File([blob], `${safe}-${suffix}.png`, { type: "image/png" })], previews: [{ src: URL.createObjectURL(blob), cap: "" }] };
     }
     await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
     const pdf = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
     const M = 12, W = 210 - M * 2, H = 297 - M * 2;
-    let first = true;
+    let first = true; const previews = [];
     for (const sec of sections) {
       const canvas = await snap(sec);
       const pxPerMm = canvas.width / W, slice = Math.floor(H * pxPerMm);
@@ -1251,17 +1287,56 @@ async function makeFiles() {
         const c = document.createElement("canvas"); c.width = canvas.width; c.height = h;
         const ctx = c.getContext("2d"); ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, c.width, h); ctx.drawImage(canvas, 0, y, canvas.width, h, 0, 0, canvas.width, h);
         if (!first) pdf.addPage(); first = false;
-        pdf.addImage(c.toDataURL("image/jpeg", 0.92), "JPEG", M, M, W, h / pxPerMm);
+        const jpg = c.toDataURL("image/jpeg", 0.92);
+        pdf.addImage(jpg, "JPEG", M, M, W, h / pxPerMm);
+        previews.push({ src: jpg, cap: "" });
       }
     }
-    return [new File([pdf.output("blob")], `${safe}-${suffix}.pdf`, { type: "application/pdf" })];
+    previews.forEach((p, i) => { p.cap = `${i + 1}쪽 / ${previews.length}쪽`; });
+    return { files: [new File([pdf.output("blob")], `${safe}-${suffix}.pdf`, { type: "application/pdf" })], previews };
   } finally { $("xpStage").textContent = ""; }
 }
-async function runExport(share) {
-  const msg = $("xMsg"); msg.classList.remove("ok"); msg.textContent = "만드는 중…";
+// ---------- 미리보기: 형식·범위를 고르면 먼저 만들어서 보여주고, 공유·저장은 만든 파일을 바로 써요 ----------
+// (아이폰은 버튼을 누른 직후에만 공유창을 열어 줘서, 미리 만들어 두면 공유가 바로 떠요)
+let xCache = null, xToken = 0;
+function clearPreview() {
+  if (xCache) xCache.previews.forEach((p) => { if (p.src.startsWith("blob:")) URL.revokeObjectURL(p.src); });
+  xCache = null;
+}
+async function preparePreview() {
+  const token = ++xToken;
+  clearPreview();
+  const box = $("xPrev"); box.innerHTML = '<span class="wait">미리보기를 만드는 중…</span>';
+  const msg = $("xMsg"); msg.classList.remove("ok"); msg.textContent = "";
   $("xSave").disabled = $("xShare").disabled = true;
   try {
-    const files = await makeFiles();
+    const made = await makeFiles();
+    if (token !== xToken) { made.previews.forEach((p) => { if (p.src.startsWith("blob:")) URL.revokeObjectURL(p.src); }); return; }
+    xCache = made;
+    box.textContent = "";
+    for (const p of made.previews) {
+      const fig = document.createElement("figure");
+      const img = document.createElement("img"); img.src = p.src; img.alt = "미리보기";
+      fig.append(img);
+      if (p.cap) { const c = document.createElement("figcaption"); c.textContent = p.cap; fig.append(c); }
+      box.append(fig);
+    }
+    const kb = Math.round(made.files.reduce((n, f) => n + f.size, 0) / 1024);
+    msg.classList.add("ok");
+    msg.textContent = `${made.files.length > 1 ? `파일 ${made.files.length}개` : made.files[0].name} · ${kb >= 1024 ? (kb / 1024).toFixed(1) + "MB" : kb + "KB"}`;
+  } catch (ex) {
+    if (token !== xToken) return;
+    console.error(ex);
+    box.innerHTML = '<span class="wait">미리보기를 만들지 못했어요.</span>';
+    msg.textContent = "인터넷 연결을 확인하고 형식을 다시 골라 보세요.";
+  } finally { if (token === xToken) $("xSave").disabled = $("xShare").disabled = false; }
+}
+async function runExport(share) {
+  const msg = $("xMsg"); msg.classList.remove("ok");
+  if (!xCache) { await preparePreview(); if (!xCache) return; }
+  const made = xCache;
+  try {
+    const files = made.files;
     if (share && navigator.canShare?.({ files })) {
       try { await navigator.share({ files, title: info.title }); msg.classList.add("ok"); msg.textContent = "공유했어요."; }
       catch (ex) { if (ex.name !== "AbortError") throw ex; msg.textContent = ""; }
@@ -1272,12 +1347,13 @@ async function runExport(share) {
         setTimeout(() => URL.revokeObjectURL(url), 10000);
         await new Promise((r) => setTimeout(r, 300));
       }
+      if (xCache !== made) return; // 저장하는 사이 형식을 바꿨으면 새 미리보기 안내를 덮어쓰지 않아요
       msg.classList.add("ok"); msg.textContent = files.length > 1 ? `파일 ${files.length}개를 저장했어요.` : `${files[0].name} 파일을 저장했어요.`;
     }
   } catch (ex) {
     console.error(ex);
-    msg.textContent = "파일을 만들지 못했어요. 인터넷 연결을 확인하고 다시 해보세요.";
-  } finally { $("xSave").disabled = $("xShare").disabled = false; }
+    msg.textContent = share ? "공유하지 못했어요. ‘파일로 저장’으로 받은 뒤 보내 보세요." : "저장하지 못했어요. 다시 해보세요.";
+  }
 }
 $("xSave").onclick = () => runExport(false);
 $("xShare").onclick = () => runExport(true);
