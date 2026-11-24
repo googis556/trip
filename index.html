@@ -227,7 +227,7 @@ h2.trip-title { margin: 0; font-size: 22px; font-weight: 700; text-wrap: balance
 .xw-body { position: relative; overflow: hidden; }
 .xw-hour { position: absolute; left: 0; right: 0; border-top: 1px solid #edf1f3; }
 .xw-rail .xw-body span { position: absolute; right: 4px; font-size: 9px; color: #7b8c94; font-family: var(--font-mono); transform: translateY(-50%); }
-.xw-ev { position: absolute; border-radius: 4px; border-left: 2px solid; padding: 2px 3px; box-sizing: border-box; overflow: hidden; font-size: 9.5px; line-height: 1.25; }
+.xw-ev { position: absolute; border-radius: 4px; border-left: 2px solid; padding: 1px 3px; box-sizing: border-box; overflow: hidden; font-size: 9.5px; line-height: 1.25; }
 .xw-ev .t { font-family: var(--font-mono); font-size: 8.5px; white-space: nowrap; overflow: hidden; }
 .xw-ev .n { font-weight: 700; color: #13232b; overflow-wrap: anywhere; }
 .xw-ev.one { padding: 0 3px; display: flex; align-items: center; }
@@ -1203,10 +1203,10 @@ function buildWeekImages() {
         const top = ((cs - h0 * 60) / 60) * HH, room = ((Math.min(x._next, h1 * 60) - cs) / 60) * HH - 1;
         const hpx = Math.min(Math.max(((ce - cs) / 60) * HH - 1, Math.min(14, room)), bodyH - top);
         const w = 100 / x._lanes;
-        const el = document.createElement("div"); el.className = "xw-ev" + (hpx < 30 ? " one" : "");
+        const el = document.createElement("div"); el.className = "xw-ev" + (hpx < 24 ? " one" : "");
         Object.assign(el.style, { top: top + "px", height: hpx + "px", left: `calc(${x._lane * w}% + 1px)`, width: `calc(${w}% - 2px)`, background: ci2.bg, borderLeftColor: ci2.fg });
         if (!x.first) el.style.borderLeftStyle = "dashed";
-        if (hpx >= 30) { const t = document.createElement("div"); t.className = "t"; t.style.color = ci2.fg; t.textContent = x.first ? hhmm(x.start) : (x.end >= 1440 ? "종일" : `~${hhmm(x.end)}`); el.append(t); }
+        if (hpx >= 24) { const t = document.createElement("div"); t.className = "t"; t.style.color = ci2.fg; t.textContent = x.first ? hhmm(x.start) : (x.end >= 1440 ? "종일" : `~${hhmm(x.end)}`); el.append(t); }
         const n = document.createElement("div"); n.className = "n"; n.textContent = x.title || "(제목 없음)"; el.append(n);
         body.append(el);
       }
