@@ -754,19 +754,23 @@ const wrap = $("boardWrap");
 $("legend").innerHTML = CATS.map((c) => `<span class="cat-${c.id}"><i></i>${c.label}</span>`).join("");
 $("fCats").innerHTML = CATS.map((c) => `<label class="cat-${c.id}"><input type="radio" name="cat" value="${c.id}" id="cat-${c.id}"><span>${c.label}</span></label>`).join("");
 
-// 겹침 계산은 "보이는 끝"(짧은 일정은 최소 한 줄 높이) 기준이라, 짧은 일정 바로 뒤 일정이 가려지지 않고 옆으로 놓여요
-function layoutDay(list, minMin = 0) {
-  list.forEach((e) => { e._ve = Math.max(e.end, e.start + minMin); });
+// 겹침 배치: 시간이 실제로 겹치는 일정끼리만 나란히 놓아요 (끝 시각 = 다음 시작 시각이면 겹치지 않음)
+// _next: 이 일정 아래로 바로 이어지는 일정의 시작 시각. 짧은 일정의 최소 높이는 여기까지만 늘려서 아래 일정을 가리지 않아요
+function layoutDay(list) {
   list.sort((a, b) => a.start - b.start || b.end - a.end);
-  const out = []; let cluster = []; let clusterEnd = -1;
+  const out = []; let cluster = []; let clusterEnd = -1; let cid = 0;
   const flush = () => {
     const lanes = [];
-    cluster.forEach((e) => { let lane = lanes.findIndex((end) => end <= e.start); if (lane < 0) { lane = lanes.length; lanes.push(0); } lanes[lane] = e._ve; e._lane = lane; });
+    cluster.forEach((e) => { let lane = lanes.findIndex((end) => end <= e.start); if (lane < 0) { lane = lanes.length; lanes.push(0); } lanes[lane] = e.end; e._lane = lane; e._cid = cid; });
     cluster.forEach((e) => { e._lanes = lanes.length; out.push(e); });
-    cluster = [];
+    cluster = []; cid++;
   };
-  list.forEach((e) => { if (cluster.length && e.start >= clusterEnd) flush(); if (!cluster.length) clusterEnd = e._ve; cluster.push(e); clusterEnd = Math.max(clusterEnd, e._ve); });
+  list.forEach((e) => { if (cluster.length && e.start >= clusterEnd) flush(); if (!cluster.length) clusterEnd = e.end; cluster.push(e); clusterEnd = Math.max(clusterEnd, e.end); });
   if (cluster.length) flush();
+  out.forEach((e) => {
+    e._next = 1440;
+    for (const o of out) if (o !== e && o.start >= e.end && (o._cid !== e._cid || o._lane === e._lane)) e._next = Math.min(e._next, o.start);
+  });
   return out;
 }
 
@@ -801,11 +805,11 @@ function renderTrip() {
   }
   for (let d = 0; d < info.days; d++) {
     const dt = dayDate(d); const wk = dt.getDay() === 0 || dt.getDay() === 6;
-    const evHtml = layoutDay(byDay[d], (MIN_EV_PX + 2) / hourPx * 60).map((e) => {
+    const evHtml = layoutDay(byDay[d]).map((e) => {
       const w = 100 / e._lanes, dur = e.end - e.start, px = (dur / 60) * hourPx - 2;
       const cls = ["ev", "cat-" + e.cat, px < 44 ? "short" : "", px < 22 ? "tiny" : "", e.first ? "" : "cont", drag && drag.id === e.id && drag.moved ? "dragging" : ""].join(" ");
       const label = e.first ? spanLabel(e.full) : (e.end >= 1440 ? "이어서 · 종일" : `이어서 ~${hhmm(e.end)}`);
-      return `<div class="${cls}" data-id="${e.id}" tabindex="0" role="button" style="top:calc(var(--hour) * ${e.start / 60});height:${Math.max(px, MIN_EV_PX)}px;left:calc(${e._lane * w}% + 3px);width:calc(${w}% - 6px)"><div class="t">${label}</div><div class="n"></div><div class="p"></div>${canWrite && e.last ? '<div class="grip" data-grip="1"></div>' : ""}</div>`;
+      return `<div class="${cls}" data-id="${e.id}" tabindex="0" role="button" style="top:calc(var(--hour) * ${e.start / 60});height:${Math.max(px, Math.min(MIN_EV_PX, ((e._next - e.start) / 60) * hourPx - 2))}px;left:calc(${e._lane * w}% + 3px);width:calc(${w}% - 6px)"><div class="t">${label}</div><div class="n"></div><div class="p"></div>${canWrite && e.last ? '<div class="grip" data-grip="1"></div>' : ""}</div>`;
     }).join("");
     let ghost = "";
     if (drag && drag.mode === "create") {
@@ -1192,11 +1196,12 @@ function buildWeekImages() {
       const body = document.createElement("div"); body.className = "xw-body"; body.style.height = bodyH + "px";
       for (let h = 1; h < hours; h++) { const ln = document.createElement("div"); ln.className = "xw-hour"; ln.style.top = h * HH + "px"; body.append(ln); }
       const list = (segs.get(c.idx) || []).map((x) => ({ ...x }));
-      for (const x of layoutDay(list, (15 / HH) * 60)) {
+      for (const x of layoutDay(list)) {
         const ci2 = catInfo(x.cat);
         const cs = Math.max(x.start, h0 * 60), ce = Math.min(x.end, h1 * 60); // 그린 시간 범위 밖은 잘라요
         if (ce <= cs) continue;
-        const top = ((cs - h0 * 60) / 60) * HH, hpx = Math.min(Math.max(((ce - cs) / 60) * HH - 1, 14), bodyH - top);
+        const top = ((cs - h0 * 60) / 60) * HH, room = ((Math.min(x._next, h1 * 60) - cs) / 60) * HH - 1;
+        const hpx = Math.min(Math.max(((ce - cs) / 60) * HH - 1, Math.min(14, room)), bodyH - top);
         const w = 100 / x._lanes;
         const el = document.createElement("div"); el.className = "xw-ev" + (hpx < 30 ? " one" : "");
         Object.assign(el.style, { top: top + "px", height: hpx + "px", left: `calc(${x._lane * w}% + 1px)`, width: `calc(${w}% - 2px)`, background: ci2.bg, borderLeftColor: ci2.fg });
