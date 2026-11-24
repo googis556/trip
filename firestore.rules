@@ -29,7 +29,9 @@ service cloud.firestore {
         && d.memo is string && d.memo.size() <= 500
         && d.cat in ['move', 'see', 'eat', 'stay', 'shop', 'etc']
         && d.day is int && d.day >= 0 && d.day < 14
-        && d.start is int && d.end is int && d.start >= 0 && d.end <= 1440 && d.start < d.end
+        // start: 그날 0시부터 분, end: 같은 기준이라 자정을 넘으면 1440보다 커요 (최대 72시간)
+        && d.start is int && d.end is int && d.start >= 0 && d.start < 1440
+        && d.end > d.start && d.end - d.start <= 4320
         && d.createdByName is string && d.createdByName.size() <= 40
         && d.updatedByName is string && d.updatedByName.size() <= 40
         && d.updatedBy == request.auth.uid;
