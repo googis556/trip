@@ -199,6 +199,33 @@ h2.trip-title { margin: 0; font-size: 22px; font-weight: 700; text-wrap: balance
 .xp-memo { font-size: 12.5px; color: #5d6f78; margin-top: 3px; white-space: pre-wrap; }
 .xp-none { color: #8a9aa1; font-size: 13px; padding: 10px 0; border-top: 1px solid #e6ecef; }
 .xp-foot { font-size: 11px; color: #8a9aa1; padding: 0 32px 20px; background: #ffffff; }
+/* weekly timetable image: 540 CSS px wide, rendered at 2x = 1080px for phones */
+.xw { width: 540px; background: #ffffff; color: #13232b; font-family: var(--font-body); padding: 18px 14px 14px; box-sizing: border-box; }
+.xw-title { font-size: 18px; font-weight: 700; letter-spacing: -.01em; }
+.xw-sub { font-size: 11px; color: #5d6f78; margin-top: 2px; font-family: var(--font-mono); }
+.xw-legend { display: flex; flex-wrap: wrap; gap: 3px 9px; font-size: 10px; color: #5d6f78; margin: 8px 0 10px; }
+.xw-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 3px; vertical-align: -1px; }
+.xw-grid { display: flex; border: 1px solid #d5dee2; border-radius: 8px; overflow: hidden; }
+.xw-rail { width: 30px; flex: none; border-right: 1px solid #d5dee2; }
+.xw-col { flex: 1 1 0; min-width: 0; border-right: 1px solid #e6ecef; }
+.xw-col:last-child { border-right: 0; }
+.xw-col.off { background: #f4f6f7; }
+.xw-head { height: 46px; border-bottom: 1px solid #d5dee2; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #ffffff; }
+.xw-col.off .xw-head { background: #f4f6f7; color: #a3b0b6; }
+.xw-head b { font-size: 11.5px; }
+.xw-head small { font-size: 9.5px; color: #5d6f78; font-family: var(--font-mono); line-height: 1.25; }
+.xw-head .xw-n { font-family: var(--font-body); color: #0b6f6a; font-weight: 500; }
+.xw-col.off .xw-head small { color: #a3b0b6; }
+.xw-head.sun b { color: #c0392b; } .xw-head.sat b { color: #2f6fd0; }
+.xw-body { position: relative; }
+.xw-hour { position: absolute; left: 0; right: 0; border-top: 1px solid #edf1f3; }
+.xw-rail .xw-body span { position: absolute; right: 4px; font-size: 9px; color: #7b8c94; font-family: var(--font-mono); transform: translateY(-50%); }
+.xw-ev { position: absolute; border-radius: 4px; border-left: 2px solid; padding: 2px 3px; box-sizing: border-box; overflow: hidden; font-size: 9.5px; line-height: 1.25; }
+.xw-ev .t { font-family: var(--font-mono); font-size: 8.5px; white-space: nowrap; overflow: hidden; }
+.xw-ev .n { font-weight: 700; color: #13232b; overflow-wrap: anywhere; }
+.xw-ev.one { padding: 0 3px; display: flex; align-items: center; }
+.xw-ev.one .n { white-space: nowrap; overflow: hidden; font-size: 9px; }
+.xw-foot { font-size: 9.5px; color: #8a9aa1; margin-top: 8px; }
 
 @media (max-width: 560px) {
   h2.trip-title { font-size: 19px; }
@@ -376,12 +403,13 @@ h2.trip-title { margin: 0; font-size: 22px; font-weight: 700; text-wrap: balance
 <div class="scrim" id="exportSheet" hidden>
   <form class="sheet" id="xpForm" novalidate>
     <h3>이미지·PDF로 공유</h3>
-    <p class="sub">날짜별로 시간, 일정, 장소, 메모를 정리한 표로 만들어요.</p>
-    <label class="field"><span>범위</span><select id="xRange"></select></label>
+    <p class="sub" id="xSub">날짜별로 시간, 일정, 장소, 메모를 정리한 표로 만들어요.</p>
+    <label class="field" id="xRangeField"><span>범위</span><select id="xRange"></select></label>
     <div class="field"><span>형식</span>
       <div class="seg">
         <label><input type="radio" name="xfmt" value="png" id="xPng" checked><span>이미지 (PNG)</span></label>
         <label><input type="radio" name="xfmt" value="pdf" id="xPdf"><span>PDF (날짜별 페이지)</span></label>
+        <label><input type="radio" name="xfmt" value="week" id="xWeek"><span>주간 시간표 (일~토)</span></label>
       </div>
     </div>
     <p class="err" id="xMsg"></p>
@@ -900,7 +928,8 @@ function openEditor(id, preset) {
   show("fSave", canWrite);
   $("evForm").querySelectorAll("input,select,textarea").forEach((el) => (el.disabled = !canWrite));
   show("editor");
-  if (canWrite) setTimeout(() => $("fTitle").focus(), 30);
+  // 사용자가 이미 다른 칸을 눌렀으면 포커스를 빼앗지 않아요
+  if (canWrite) setTimeout(() => { if (!$("evForm").contains(document.activeElement)) $("fTitle").focus(); }, 30);
 }
 function setFErr(msg, ok) { const el = $("fErr"); el.textContent = msg; el.classList.toggle("ok", !!ok); }
 // 시작 날짜를 바꾸면 종료 날짜도 같은 만큼 옮겨요
@@ -1054,9 +1083,101 @@ $("exportBtn").onclick = () => {
   sel.innerHTML = `<option value="all">전체 일정 (${info.days}일)</option>` + Array.from({ length: info.days }, (_, i) => `<option value="${i}">${dayLabel(i)}</option>`).join("");
   $("xMsg").textContent = ""; $("xMsg").classList.remove("ok");
   show("xShare", canShareFiles);
+  syncExportMode();
   show("exportSheet");
 };
 $("xCancel").onclick = () => show("exportSheet", false);
+function syncExportMode() {
+  const week = $("xWeek").checked;
+  show("xRangeField", !week);
+  $("xSub").textContent = week
+    ? "일요일부터 토요일까지 한 주를 시간표 그대로 휴대폰 화면에 맞춘 이미지로 만들어요. 여행이 여러 주에 걸치면 주마다 한 장씩 만들어요."
+    : "날짜별로 시간, 일정, 장소, 메모를 정리한 표로 만들어요.";
+}
+document.querySelectorAll('input[name="xfmt"]').forEach((r) => r.addEventListener("change", syncExportMode));
+
+// ---------- weekly timetable image ----------
+// 여행 날짜가 들어있는 주(일~토)마다 7칸 시간표를 만들어요
+function tripWeeks() {
+  const first = dayDate(0);
+  const base = Date.UTC(first.getFullYear(), first.getMonth(), first.getDate());
+  const idxOf = (d) => Math.round((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - base) / 86400000);
+  const weeks = [];
+  const sun = new Date(first.getFullYear(), first.getMonth(), first.getDate() - first.getDay());
+  for (let w = sun; idxOf(w) < info.days; w = new Date(w.getFullYear(), w.getMonth(), w.getDate() + 7)) {
+    weeks.push(Array.from({ length: 7 }, (_, i) => { const date = new Date(w.getFullYear(), w.getMonth(), w.getDate() + i); return { date, idx: idxOf(date) }; }));
+  }
+  return weeks;
+}
+function segmentsByDay() {
+  const map = new Map();
+  for (const [id, e] of events) {
+    for (let d = e.day; d <= info.days; d++) {
+      const off = (d - e.day) * 1440;
+      const s = Math.max(0, e.start - off), en = Math.min(1440, e.end - off);
+      if (en <= s) break;
+      if (!map.has(d)) map.set(d, []);
+      map.get(d).push({ id, ...e, full: e, start: s, end: en, first: d === e.day });
+    }
+  }
+  return map;
+}
+function buildWeekImages() {
+  const stage = $("xpStage"); stage.textContent = "";
+  const segs = segmentsByDay();
+  const roots = [];
+  const weeks = tripWeeks();
+  weeks.forEach((cols, wi) => {
+    const inWeek = cols.flatMap((c) => segs.get(c.idx) || []);
+    let h0 = 9, h1 = 18;
+    if (inWeek.length) { h0 = Math.floor(Math.min(...inWeek.map((x) => x.start)) / 60); h1 = Math.ceil(Math.max(...inWeek.map((x) => x.end)) / 60); }
+    if (h1 - h0 < 6) { h1 = Math.min(24, h0 + 6); h0 = Math.max(0, h1 - 6); }
+    const hours = h1 - h0;
+    const HH = clamp(Math.round(1050 / hours), 32, 64); // 휴대폰 세로 화면에 맞도록 한 시간 높이를 조절
+    const bodyH = hours * HH;
+    const root = document.createElement("div"); root.className = "xw";
+    const title = document.createElement("div"); title.className = "xw-title"; title.textContent = info.title;
+    const sub = document.createElement("div"); sub.className = "xw-sub";
+    const a = cols[0].date, b = cols[6].date;
+    sub.textContent = `${a.getFullYear()}.${a.getMonth() + 1}.${a.getDate()}(일) – ${b.getMonth() + 1}.${b.getDate()}(토)` + (weeks.length > 1 ? ` · ${wi + 1}/${weeks.length}주` : "");
+    const legend = document.createElement("div"); legend.className = "xw-legend";
+    for (const c of CATS) { const sp = document.createElement("span"); const i = document.createElement("i"); i.style.background = c.fg; sp.append(i, c.label); legend.append(sp); }
+    const grid = document.createElement("div"); grid.className = "xw-grid";
+    const rail = document.createElement("div"); rail.className = "xw-rail";
+    const rh = document.createElement("div"); rh.className = "xw-head";
+    const rb = document.createElement("div"); rb.className = "xw-body"; rb.style.height = bodyH + "px";
+    for (let h = 1; h < hours; h++) { const sp = document.createElement("span"); sp.style.top = h * HH + "px"; sp.textContent = pad(h0 + h); rb.append(sp); }
+    rail.append(rh, rb); grid.append(rail);
+    cols.forEach((c, ci) => {
+      const inTrip = c.idx >= 0 && c.idx < info.days;
+      const col = document.createElement("div"); col.className = "xw-col" + (inTrip ? "" : " off");
+      const head = document.createElement("div"); head.className = "xw-head" + (ci === 0 ? " sun" : ci === 6 ? " sat" : "");
+      const hb = document.createElement("b"); hb.textContent = WD[ci];
+      const hs = document.createElement("small"); hs.textContent = `${c.date.getMonth() + 1}/${c.date.getDate()}`;
+      head.append(hb, hs);
+      if (inTrip) { const hn = document.createElement("small"); hn.className = "xw-n"; hn.textContent = `${c.idx + 1}일차`; head.append(hn); }
+      const body = document.createElement("div"); body.className = "xw-body"; body.style.height = bodyH + "px";
+      for (let h = 1; h < hours; h++) { const ln = document.createElement("div"); ln.className = "xw-hour"; ln.style.top = h * HH + "px"; body.append(ln); }
+      const list = (segs.get(c.idx) || []).map((x) => ({ ...x }));
+      for (const x of layoutDay(list, (15 / HH) * 60)) {
+        const ci2 = catInfo(x.cat);
+        const top = ((x.start - h0 * 60) / 60) * HH, hpx = Math.max(((x.end - x.start) / 60) * HH - 1, 14);
+        const w = 100 / x._lanes;
+        const el = document.createElement("div"); el.className = "xw-ev" + (hpx < 30 ? " one" : "");
+        Object.assign(el.style, { top: top + "px", height: hpx + "px", left: `calc(${x._lane * w}% + 1px)`, width: `calc(${w}% - 2px)`, background: ci2.bg, borderLeftColor: ci2.fg });
+        if (!x.first) el.style.borderLeftStyle = "dashed";
+        if (hpx >= 30) { const t = document.createElement("div"); t.className = "t"; t.style.color = ci2.fg; t.textContent = x.first ? hhmm(x.start) : `~${hhmm(x.end)}`; el.append(t); }
+        const n = document.createElement("div"); n.className = "n"; n.textContent = x.title || "(제목 없음)"; el.append(n);
+        body.append(el);
+      }
+      col.append(head, body); grid.append(col);
+    });
+    const foot = document.createElement("div"); foot.className = "xw-foot"; foot.textContent = `여행 일정표 · ${iso(new Date())} 기준`;
+    root.append(title, sub, legend, grid, foot);
+    stage.append(root); roots.push(root);
+  });
+  return roots;
+}
 
 function buildExport(days) {
   const stage = $("xpStage"); stage.textContent = "";
@@ -1089,9 +1210,22 @@ function buildExport(days) {
   stage.append(root);
   return { root, sections };
 }
-async function makeFile() {
+async function makeFiles() {
   await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
   const fmt = document.querySelector('input[name="xfmt"]:checked').value;
+  if (fmt === "week") {
+    try { await document.fonts.ready; } catch {}
+    const safeW = (info.title || "여행").replace(/[\\/:*?"<>|]+/g, " ").trim().slice(0, 40) || "여행";
+    try {
+      const roots = buildWeekImages(), files = [];
+      for (let i = 0; i < roots.length; i++) {
+        const canvas = await window.html2canvas(roots[i], { scale: 2, backgroundColor: "#ffffff", logging: false });
+        const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
+        files.push(new File([blob], `${safeW}-주간시간표${roots.length > 1 ? `-${i + 1}주` : ""}.png`, { type: "image/png" }));
+      }
+      return files;
+    } finally { $("xpStage").textContent = ""; }
+  }
   const range = $("xRange").value;
   const days = range === "all" ? [...Array(info.days).keys()] : [Number(range)];
   const safe = (info.title || "여행").replace(/[\\/:*?"<>|]+/g, " ").trim().slice(0, 40) || "여행";
@@ -1103,7 +1237,7 @@ async function makeFile() {
     if (fmt === "png") {
       const canvas = await snap(root);
       const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
-      return new File([blob], `${safe}-${suffix}.png`, { type: "image/png" });
+      return [new File([blob], `${safe}-${suffix}.png`, { type: "image/png" })];
     }
     await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
     const pdf = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
@@ -1120,22 +1254,25 @@ async function makeFile() {
         pdf.addImage(c.toDataURL("image/jpeg", 0.92), "JPEG", M, M, W, h / pxPerMm);
       }
     }
-    return new File([pdf.output("blob")], `${safe}-${suffix}.pdf`, { type: "application/pdf" });
+    return [new File([pdf.output("blob")], `${safe}-${suffix}.pdf`, { type: "application/pdf" })];
   } finally { $("xpStage").textContent = ""; }
 }
 async function runExport(share) {
   const msg = $("xMsg"); msg.classList.remove("ok"); msg.textContent = "만드는 중…";
   $("xSave").disabled = $("xShare").disabled = true;
   try {
-    const file = await makeFile();
-    if (share && navigator.canShare?.({ files: [file] })) {
-      try { await navigator.share({ files: [file], title: info.title }); msg.classList.add("ok"); msg.textContent = "공유했어요."; }
+    const files = await makeFiles();
+    if (share && navigator.canShare?.({ files })) {
+      try { await navigator.share({ files, title: info.title }); msg.classList.add("ok"); msg.textContent = "공유했어요."; }
       catch (ex) { if (ex.name !== "AbortError") throw ex; msg.textContent = ""; }
     } else {
-      const url = URL.createObjectURL(file);
-      const a = document.createElement("a"); a.href = url; a.download = file.name; document.body.append(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
-      msg.classList.add("ok"); msg.textContent = `${file.name} 파일을 저장했어요.`;
+      for (const file of files) {
+        const url = URL.createObjectURL(file);
+        const a = document.createElement("a"); a.href = url; a.download = file.name; document.body.append(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+        await new Promise((r) => setTimeout(r, 300));
+      }
+      msg.classList.add("ok"); msg.textContent = files.length > 1 ? `파일 ${files.length}개를 저장했어요.` : `${files[0].name} 파일을 저장했어요.`;
     }
   } catch (ex) {
     console.error(ex);
